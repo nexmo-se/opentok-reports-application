@@ -1,0 +1,21 @@
+{
+  "name": "Opentok Reports Application",
+  "description": "Reference application for fetching data from the Insights API",
+  "repository": "",
+  "logo": "https://node-js-sample.herokuapp.com/node.png",
+  "env": {
+    "PORT": {
+      "description": "Application port",
+      "required": false,
+      "value": "3000"
+    },
+    "OPENTOK_API_KEY": {
+      "description": "Opentok Api Key",
+      "required": true
+    },
+    "OPENTOK_API_SECRET": {
+      "description": "Opentok Api Secret",
+      "required": true
+    }
+  }
+}
