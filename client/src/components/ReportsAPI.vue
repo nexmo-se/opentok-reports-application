@@ -25,9 +25,17 @@
   import * as flatpickr from "@vonagevolta/volta2/js/addons/volta-flatpickr.js";
   import fecha from "fecha";
 
+  function originApiUrl() {
+    let url = location.origin;
+    if (process.env.NODE_ENV === "development") {
+        url = 'http://localhost:3000'; 
+    }
+    return url;
+  }; 
+  
   function initialState() {
     return {
-      apiServer: "http://localhost:3000",
+      apiServer: originApiUrl(),
       apiKey: "",
       apiSecret: "",
       startDate: new Date(),
