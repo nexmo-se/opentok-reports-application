@@ -1,7 +1,7 @@
 {
   "name": "Opentok Reports Application",
   "description": "Reference application for fetching data from the Insights API",
-  "repository": "",
+  "repository": "https://github.com/nexmo-se/opentok-reports-application",
   "logo": "https://node-js-sample.herokuapp.com/node.png",
   "env": {
     "PORT": {
