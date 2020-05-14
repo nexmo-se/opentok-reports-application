@@ -9,39 +9,16 @@ const processData = async (sessions) => {
 	const result = [];
 
 	//Scheme 
-	var sessionId, meetingId, pubMinutes, subMinutes, role, streamId, videoType, createdAt, destroyedAt; 
+	var sessionId, subMinutes, createdAt; 
 
 	sessions.forEach(session => {
 		sessionId = session.sessionId; 
-		session.meetings.resources.forEach(meeting => { 
-			meetingId = meeting.meetingId; 
-			pubMinutes = meeting.publisherMinutes; 
-			subMinutes = meeting.subscriberMinutes; 
-			
-			role = 'Subscriber'; 
-			meeting.subscribers.resources.forEach(subscriber => { 
-				streamId = subscriber.stream.streamId; 
-				videoType = subscriber.stream.videoType; 
-				createdAt = subscriber.createdAt; 
-				destroyedAt = subscriber.destroyedAt; 
-
-				result.push({ 
-					sessionId, meetingId, pubMinutes, subMinutes, role, streamId, videoType, createdAt, destroyedAt
-				})
-			})
-
-			role = 'Publisher'; 
-			meeting.publishers.resources.forEach(publisher => { 
-				streamId = publisher.stream.streamId; 
-				videoType = publisher.stream.videoType; 
-				createdAt = publisher.createdAt; 
-				destroyedAt = publisher.destroyedAt; 
-
-				result.push({ 
-					sessionId, meetingId, pubMinutes, subMinutes, role, streamId, videoType, createdAt, destroyedAt
-				})
-			})
-		})
+		subMinutes = session.subscriberMinutes; 
+		createdAt = session.meetings.resources[0].createdAt; 
+		
+		result.push({ 
+			sessionId, SubscriberMinutes: subMinutes, CreatedAt: createdAt
+		}); 
 	});
 
 	filePath = __dirname + '/report.csv'; 
@@ -76,7 +53,13 @@ function Router() {
 								hasNextPage
 							}
 							resources {
-								sessionId
+								sessionId,
+								subscriberMinutes, 
+								meetings(first: 1) {
+									resources{
+									  createdAt
+									}
+								}
 							}
 						}
 					}
@@ -92,57 +75,12 @@ function Router() {
 				console.log(`[POST /report] - querying sessions list, sessionsList.size():${sessionsList.length}, hasNextPage:${hasNextPage}, endCursor:${endCursor}`); 
 				const listQuery = endCursor ? sessionsListQuery.replace(`, endCursor:`, `, endCursor: "${endCursor}"`) : sessionsListQuery.replace(`, endCursor:`, ``);
 				rawSessionsList = await axios.post('https://insights.opentok.com/graphql', { query: listQuery }, { headers }); 
-				sessionsList = sessionsList.concat(rawSessionsList.data.data.project.sessionData.sessionSummaries.resources.map(session => session.sessionId)); 
+				sessionsList = sessionsList.concat(rawSessionsList.data.data.project.sessionData.sessionSummaries.resources); 
 				hasNextPage = rawSessionsList.data.data.project.sessionData.sessionSummaries.pageInfo.hasNextPage; 
 				endCursor = rawSessionsList.data.data.project.sessionData.sessionSummaries.pageInfo.endCursor; 
 			} while (hasNextPage); 
 
-			sessionsDataQuery  = 
-			`
-				{
-					project(projectId:  ${api_key}) {
-					  	sessionData {
-							sessions(sessionIds: ${JSON.stringify(sessionsList)}) {
-								resources {
-									sessionId,
-									meetings {
-									 	resources {
-											meetingId, 
-											publisherMinutes, 
-											subscriberMinutes, 
-											publishers {
-												resources {
-													stream {
-														streamId, 
-														videoType
-													}, 
-													createdAt, 
-													destroyedAt
-												}
-											}, 
-											subscribers {
-												resources {
-													stream {
-														streamId, 
-														videoType
-													}
-													createdAt, 
-													destroyedAt
-												}	
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			`;
-
-			const rawSessionsData = await axios.post('https://insights.opentok.com/graphql', { query: sessionsDataQuery }, { headers }); 
-			const sessionsData = rawSessionsData.data.data.project.sessionData.sessions.resources; 
-			
-			const path = await processData(sessionsData); 
+			const path = await processData(sessionsList); 
 			
 			res.status(200).sendFile(path);
 		} catch (err) {  
