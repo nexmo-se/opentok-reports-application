@@ -4,12 +4,49 @@ const router = express.Router();
 const ObjectsToCsv = require('objects-to-csv');
 const { generateToken } = require('opentok-jwt');
 
-const processData = async (json) => { 
-	const resources = json.data.data.project.projectData.resources;
- 
+const processData = async (sessions) => { 
+
+	const result = [];
+
+	//Scheme 
+	var sessionId, meetingId, pubMinutes, subMinutes, role, streamId, videoType, createdAt, destroyedAt; 
+
+	sessions.forEach(session => {
+		sessionId = session.sessionId; 
+		session.meetings.resources.forEach(meeting => { 
+			meetingId = meeting.meetingId; 
+			pubMinutes = meeting.publisherMinutes; 
+			subMinutes = meeting.subscriberMinutes; 
+			
+			role = 'Subscriber'; 
+			meeting.subscribers.resources.forEach(subscriber => { 
+				streamId = subscriber.stream.streamId; 
+				videoType = subscriber.stream.videoType; 
+				createdAt = subscriber.createdAt; 
+				destroyedAt = subscriber.destroyedAt; 
+
+				result.push({ 
+					sessionId, meetingId, pubMinutes, subMinutes, role, streamId, videoType, createdAt, destroyedAt
+				})
+			})
+
+			role = 'Publisher'; 
+			meeting.publishers.resources.forEach(publisher => { 
+				streamId = publisher.stream.streamId; 
+				videoType = publisher.stream.videoType; 
+				createdAt = publisher.createdAt; 
+				destroyedAt = publisher.destroyedAt; 
+
+				result.push({ 
+					sessionId, meetingId, pubMinutes, subMinutes, role, streamId, videoType, createdAt, destroyedAt
+				})
+			})
+		})
+	});
+
 	filePath = __dirname + '/report.csv'; 
 
-	await new ObjectsToCsv(resources).toDisk(filePath, { allColumns: true });
+	await new ObjectsToCsv(result).toDisk(filePath);
 
 	return filePath; 
 };
@@ -29,36 +66,70 @@ function Router() {
 				'X-OPENTOK-AUTH': jwt
 			}; 
 
-			query  = `{
+			sessionsListQuery  = 
+			`{
 				project(projectId: ${api_key}) {
-				  projectData(start: ${date_start}, end: ${date_end}, interval: AUTO) {
-					interval, 
-					resources {
-					  intervalStart, 
-					  intervalEnd, 
-					  usage {
-						hdArchiveComposedMinutes,
-						hdBroadcastComposedMinutes,
-						hlsMinutes,
-						individualArchiveMinutes,
-						sdArchiveComposedMinutes,
-						sdBroadcastComposedMinutes,
-						sipUserMinutes,
-						streamedPublishedMinutes,
-						streamedSubscribedMinutes
-					  }
+					sessionData { 
+						sessionSummaries(start: ${date_start}, end: ${date_end}) { 
+							resources {
+								sessionId
+							}
+						}
 					}
-				  }
 				}
-			}
-			  `;
+			}`;
 
-			const data = await axios.post('https://insights.opentok.com/graphql', { query }, { headers }); 
+			const rawSessionsList = await axios.post('https://insights.opentok.com/graphql', { query: sessionsListQuery }, { headers }); 
+			const sessionsList = rawSessionsList.data.data.project.sessionData.sessionSummaries.resources.map(session => session.sessionId); 
 
-			const path = await processData(data); 
+			sessionsDataQuery  = 
+			`
+				{
+					project(projectId: ${api_key}) {
+					  	sessionData {
+							sessions(sessionIds: ${JSON.stringify(sessionsList)}) {
+								resources {
+									sessionId,
+									meetings {
+										resources {
+											meetingId, 
+											publisherMinutes, 
+											subscriberMinutes, 
+											publishers {
+												resources {
+													stream {
+														streamId, 
+														videoType
+													}, 
+													createdAt, 
+													destroyedAt
+												}
+											}, 
+											subscribers {
+												resources {
+													stream {
+														streamId, 
+														videoType
+													}
+													createdAt, 
+													destroyedAt
+												}	
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			`;
 
+			const rawSessionsData = await axios.post('https://insights.opentok.com/graphql', { query: sessionsDataQuery }, { headers }); 
+			const sessionsData = rawSessionsData.data.data.project.sessionData.sessions.resources; 
+			
+			const path = await processData(sessionsData); 
+			
 			res.status(200).sendFile(path);
-
 		} catch (err) {  
 			res.status(404).json(err); 
 		}
