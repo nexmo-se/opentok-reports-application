@@ -70,7 +70,11 @@ function Router() {
 			`{
 				project(projectId: ${api_key}) {
 					sessionData { 
-						sessionSummaries(start: ${date_start}, end: ${date_end}) { 
+						sessionSummaries(start: ${date_start}, end: ${date_end}, endCursor:) { 
+							pageInfo {
+								endCursor,
+								hasNextPage
+							}
 							resources {
 								sessionId
 							}
@@ -79,19 +83,30 @@ function Router() {
 				}
 			}`;
 
-			const rawSessionsList = await axios.post('https://insights.opentok.com/graphql', { query: sessionsListQuery }, { headers }); 
-			const sessionsList = rawSessionsList.data.data.project.sessionData.sessionSummaries.resources.map(session => session.sessionId); 
+			var endCursor; 
+			var hasNextPage = false; 
+			var sessionsList = []; 
+			var rawSessionsList; 
+
+			do {
+				console.log(`[POST /report] - querying sessions list, sessionsList.size():${sessionsList.length}, hasNextPage:${hasNextPage}, endCursor:${endCursor}`); 
+				const listQuery = endCursor ? sessionsListQuery.replace(`, endCursor:`, `, endCursor: "${endCursor}"`) : sessionsListQuery.replace(`, endCursor:`, ``);
+				rawSessionsList = await axios.post('https://insights.opentok.com/graphql', { query: listQuery }, { headers }); 
+				sessionsList = sessionsList.concat(rawSessionsList.data.data.project.sessionData.sessionSummaries.resources.map(session => session.sessionId)); 
+				hasNextPage = rawSessionsList.data.data.project.sessionData.sessionSummaries.pageInfo.hasNextPage; 
+				endCursor = rawSessionsList.data.data.project.sessionData.sessionSummaries.pageInfo.endCursor; 
+			} while (hasNextPage); 
 
 			sessionsDataQuery  = 
 			`
 				{
-					project(projectId: ${api_key}) {
+					project(projectId:  ${api_key}) {
 					  	sessionData {
 							sessions(sessionIds: ${JSON.stringify(sessionsList)}) {
 								resources {
 									sessionId,
 									meetings {
-										resources {
+									 	resources {
 											meetingId, 
 											publisherMinutes, 
 											subscriberMinutes, 
