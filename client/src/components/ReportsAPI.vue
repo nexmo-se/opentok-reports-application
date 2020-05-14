@@ -40,6 +40,7 @@
       apiSecret: "",
       startDate: new Date(),
       endDate: new Date(),
+      fileInterval: {}, 
       status: "REPORT"
     };
   }
@@ -80,7 +81,7 @@
             body
           );
           if (response.status === 200) {
-            vm.handleReport(response);
+            await vm.handleReport(response);
           } else {
             vm.$swal(`Error: ${JSON.stringify(response)}`);
           }
@@ -89,7 +90,13 @@
           this.resetWindow();
         }
       },
-      handleReport(response) {
+      async getReportFile(reportName) { 
+        try { 
+          const response = await this.axios.post(
+            this.apiServer + "/report/get",
+            {report_name: reportName}
+        );
+
         var fileURL = window.URL.createObjectURL(new Blob([response.data]));
         var fileLink = document.createElement("a");
 
@@ -99,9 +106,19 @@
 
         fileLink.click();
         this.resetWindow();
+        } catch (err) { 
+          console.log("Can't find report, will try again"); 
+        }
+      }, 
+      async handleReport(response) {
+        var vm = this;
+        this.fileInterval = setInterval(async () => {
+            await vm.getReportFile(response.data.report_name); 
+        }, 10000)
       },
       resetWindow: function() {
-        Object.assign(this.$data, initialState());
+        clearInterval(this.fileInterval)
+        Object.assign(this.$data, initialState());        
       }
     },
     mounted() {

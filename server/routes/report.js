@@ -1,10 +1,11 @@
 const express = require('express');
 const axios = require('axios');
+const fs = require('fs')
 const router = express.Router();
 const ObjectsToCsv = require('objects-to-csv');
 const { generateToken } = require('opentok-jwt');
 
-const processData = async (sessions) => { 
+const processData = async (sessions, reportName) => { 
 
 	const result = [];
 
@@ -21,7 +22,7 @@ const processData = async (sessions) => {
 		}); 
 	});
 
-	filePath = __dirname + '/report.csv'; 
+	filePath = __dirname + "/" + reportName + ".csv"; 
 
 	await new ObjectsToCsv(result).toDisk(filePath);
 
@@ -34,6 +35,10 @@ function Router() {
 		console.log(`[POST /report] - key:${req.body.api_key}, start_date:${req.body.date_start}, end:${req.body.date_end}`); 
 
 		const { api_key, api_secret, date_start, date_end } = req.body;
+
+		const reportName = `${api_key}`; 
+
+		res.status(200).json({report_name: reportName});
 		
 		const jwt = generateToken(api_key, api_secret, 'project'); 
 		
@@ -80,19 +85,30 @@ function Router() {
 				endCursor = rawSessionsList.data.data.project.sessionData.sessionSummaries.pageInfo.endCursor; 
 			} while (hasNextPage); 
 
-			const path = await processData(sessionsList); 
+			await processData(sessionsList, reportName); 
 			
-			res.status(200).sendFile(path);
+			//Notify done 
+			console.log(`[POST /report] - report done: ${reportName}`); 
 		} catch (err) {  
+			//Send error
+			console.log(`[POST /report] - error: ${JSON.stringify}`); 
 			res.status(404).json(err); 
 		}
 	});
 
-	router.get('/list', async function (req, res, next) {
-		const resBody = appointments.getAppointments(); 
+	router.post('/get', async function (req, res, next) {
+		console.log(`[POST /report/get] report_name: ${req.body.report_name}`); 
 		
-		res.status(200).json(resBody);
+		const name = req.body.report_name; 
+		const filePath = __dirname + "/" + name + ".csv"; 
+		
+		if (fs.existsSync(filePath)) {
+			res.status(200).sendFile(filePath); 
+		  } else  {  
+			res.status(404).json({err: 'File not ready'});
+		  }
 	});
+
 	return router;
 }
 
